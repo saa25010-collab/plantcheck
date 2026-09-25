@@ -4,17 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>生育管理アプリ - plantcheck</title>
-  <!-- Chart.js (グラフ用ライブラリ) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root { --primary: #2e7d32; --bg: #f4f6f8; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 16px; color: #333; }
     .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     h1, h2 { color: var(--primary); margin-top: 0; font-size: 1.5rem; }
+    
+    /* ユーザー情報・ログインヘッダー */
+    .auth-header { display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; }
+    .login-btn { background: #4285f4; color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .logout-btn { background: #757575; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; width: auto; margin-top: 0; }
+
     .form-group { margin-bottom: 12px; }
     label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 0.9rem; }
     input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-    button { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 8px; }
+    button.submit-btn { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 8px; }
     button:hover { opacity: 0.9; }
     .error { color: #d32f2f; font-size: 14px; margin-top: 4px; display: none; background: #ffebee; padding: 8px; border-radius: 4px; }
     .filter-group { margin: 20px 0 10px; }
@@ -22,8 +29,9 @@
     .card-title { font-weight: bold; font-size: 1.1rem; color: var(--primary); }
     .card-date { color: #666; font-size: 0.85rem; margin-top: 2px; }
     .card-detail { margin: 8px 0; font-size: 0.95rem; }
-    .delete-btn { background: #e53935; width: auto; padding: 6px 12px; font-size: 12px; position: absolute; top: 12px; right: 12px; margin-top: 0; }
+    .delete-btn { background: #e53935; width: auto; padding: 6px 12px; font-size: 12px; position: absolute; top: 12px; right: 12px; margin-top: 0; color: white; border: none; border-radius: 4px; cursor: pointer; }
     .chart-container { margin-top: 28px; position: relative; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -31,45 +39,65 @@
 <div class="container">
   <h1>🌱 生育記録アプリ</h1>
 
-  <!-- 入力フォーム -->
-  <form id="plantForm">
-    <div class="form-group">
-      <label for="cropName">作物名 <span style="color:red">*</span></label>
-      <input type="text" id="cropName" placeholder="例: トマト" required>
+  <!-- ログインエリア -->
+  <div class="auth-header">
+    <div id="userInfo" class="user-info hidden">
+      <img id="userAvatar" class="user-avatar" src="" alt="ユーザーアイコン">
+      <span id="userName" style="font-weight: bold; font-size: 0.95rem;"></span>
     </div>
-    <div class="form-group">
-      <label for="leafCount">葉枚数 (枚) <span style="color:red">*</span></label>
-      <input type="number" id="leafCount" min="0" placeholder="例: 5" required>
+    <div id="authButtons">
+      <button id="loginBtn" class="login-btn">Googleでログイン</button>
+      <button id="logoutBtn" class="logout-btn hidden">ログアウト</button>
     </div>
-    <div class="form-group">
-      <label for="height">草丈 (cm) <span style="color:red">*</span></label>
-      <input type="number" id="height" min="0" step="0.1" placeholder="例: 15.5" required>
-    </div>
-    <div class="form-group">
-      <label for="recordDate">日付 <span style="color:red">*</span></label>
-      <input type="date" id="recordDate" required>
-    </div>
-    <div class="form-group">
-      <label for="memo">メモ</label>
-      <textarea id="memo" rows="3" placeholder="日当たりや水やりの様子など"></textarea>
-    </div>
-    <div id="errorMsg" class="error">すべての必須項目を正しく入力してください。</div>
-    <button type="submit">保存する</button>
-  </form>
-
-  <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
-
-  <!-- 一覧表示 ＆ フィルター（発展機能） -->
-  <h2>📋 記録一覧</h2>
-  <div class="filter-group">
-    <input type="text" id="filterInput" placeholder="🔍 作物名で絞り込み..." oninput="renderData()">
   </div>
-  <div id="recordList"></div>
 
-  <!-- グラフ表示（発展機能） -->
-  <div class="chart-container">
-    <h2>📈 成長グラフ</h2>
-    <canvas id="growthChart"></canvas>
+  <!-- アプリ本体（ログイン時のみ表示） -->
+  <div id="appContent" class="hidden">
+    <!-- 入力フォーム -->
+    <form id="plantForm">
+      <div class="form-group">
+        <label for="cropName">作物名 <span style="color:red">*</span></label>
+        <input type="text" id="cropName" placeholder="例: トマト" required>
+      </div>
+      <div class="form-group">
+        <label for="leafCount">葉枚数 (枚) <span style="color:red">*</span></label>
+        <input type="number" id="leafCount" min="0" placeholder="例: 5" required>
+      </div>
+      <div class="form-group">
+        <label for="height">草丈 (cm) <span style="color:red">*</span></label>
+        <input type="number" id="height" min="0" step="0.1" placeholder="例: 15.5" required>
+      </div>
+      <div class="form-group">
+        <label for="recordDate">日付 <span style="color:red">*</span></label>
+        <input type="date" id="recordDate" required>
+      </div>
+      <div class="form-group">
+        <label for="memo">メモ</label>
+        <textarea id="memo" rows="3" placeholder="日当たりや水やりの様子など"></textarea>
+      </div>
+      <div id="errorMsg" class="error">すべての必須項目を正しく入力してください。</div>
+      <button type="submit" class="submit-btn">保存する</button>
+    </form>
+
+    <hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;">
+
+    <!-- 一覧表示 ＆ フィルター -->
+    <h2>📋 記録一覧</h2>
+    <div class="filter-group">
+      <input type="text" id="filterInput" placeholder="🔍 作物名で絞り込み..." oninput="renderData()">
+    </div>
+    <div id="recordList"></div>
+
+    <!-- グラフ表示 -->
+    <div class="chart-container">
+      <h2>📈 成長グラフ</h2>
+      <canvas id="growthChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 未ログイン時の案内メッセージ -->
+  <div id="loginNotice" style="text-align: center; padding: 40px 0; color: #666;">
+    <p>🌱 記録を入力・閲覧するには、上のボタンからGoogleログインしてください。</p>
   </div>
 </div>
 
@@ -77,8 +105,8 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-  // ご提供いただいた設定情報
   const firebaseConfig = {
     apiKey: "AIzaSyAiKjzvEGtJAYkhbwNPFcPqXNBnHhiC2Vw",
     authDomain: "yasai-3486c.firebaseapp.com",
@@ -90,15 +118,50 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
   const colRef = collection(db, "records");
 
   let allRecords = [];
   let chartInstance = null;
 
-  // 初期値として今日の日付をセット
   document.getElementById('recordDate').valueAsDate = new Date();
 
-  // 1. データ保存（バリデーション機能付き）
+  // ログイン処理
+  document.getElementById('loginBtn').addEventListener('click', () => {
+    signInWithPopup(auth, provider).catch(error => console.error("ログインエラー:", error));
+  });
+
+  // ログアウト処理
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    signOut(auth);
+  });
+
+  // ログイン状態の監視
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      // ログイン時
+      document.getElementById('userInfo').classList.remove('hidden');
+      document.getElementById('userName').textContent = user.displayName;
+      document.getElementById('userAvatar').src = user.photoURL;
+      document.getElementById('loginBtn').classList.add('hidden');
+      document.getElementById('logoutBtn').classList.remove('hidden');
+      document.getElementById('appContent').classList.remove('hidden');
+      document.getElementById('loginNotice').classList.add('hidden');
+      
+      // データ取得開始
+      loadRecords();
+    } else {
+      // 未ログイン時
+      document.getElementById('userInfo').classList.add('hidden');
+      document.getElementById('loginBtn').classList.remove('hidden');
+      document.getElementById('logoutBtn').classList.add('hidden');
+      document.getElementById('appContent').classList.add('hidden');
+      document.getElementById('loginNotice').classList.remove('hidden');
+    }
+  });
+
+  // データ保存
   document.getElementById('plantForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const errorMsg = document.getElementById('errorMsg');
@@ -109,7 +172,6 @@
     const date = document.getElementById('recordDate').value;
     const memo = document.getElementById('memo').value.trim();
 
-    // 入力チェック（未入力・数値以外の弾き）
     if (!cropName || isNaN(leafCount) || isNaN(height) || !date || leafCount < 0 || height < 0) {
       errorMsg.style.display = 'block';
       return;
@@ -129,27 +191,26 @@
       document.getElementById('recordDate').valueAsDate = new Date();
     } catch (err) {
       console.error("保存失敗:", err);
-      alert("データの保存に失敗しました。Firestoreのルール設定を確認してください。");
+      alert("データの保存に失敗しました。");
     }
   });
 
-  // 2. リアルタイム読み込み（日付昇順で取得）
-  const q = query(colRef, orderBy("date", "asc"));
-  onSnapshot(q, (snapshot) => {
-    allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderData();
-  });
+  // データ読み込み
+  function loadRecords() {
+    const q = query(colRef, orderBy("date", "asc"));
+    onSnapshot(q, (snapshot) => {
+      allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderData();
+    });
+  }
 
-  // 3. 一覧表示・フィルター・ソート処理
+  // 描画・フィルター処理
   window.renderData = () => {
     const listEl = document.getElementById('recordList');
     const filterText = document.getElementById('filterInput').value.toLowerCase();
     listEl.innerHTML = '';
 
-    // 作物名で絞り込み（発展機能）
     const filtered = allRecords.filter(r => r.cropName.toLowerCase().includes(filterText));
-
-    // 画面表示は新しい日付順（降順）に並び替え（発展機能）
     const displayRecords = [...filtered].reverse();
 
     if (displayRecords.length === 0) {
@@ -172,7 +233,7 @@
     updateChart(filtered);
   };
 
-  // 4. データ削除（発展機能）
+  // データ削除
   window.deleteRecord = async (id) => {
     if (confirm("この記録を削除しますか？")) {
       try {
@@ -184,7 +245,7 @@
     }
   };
 
-  // 5. グラフ描画（発展機能）
+  // グラフ描画
   function updateChart(data) {
     const ctx = document.getElementById('growthChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
@@ -198,17 +259,10 @@
           { label: '葉枚数 (枚)', data: data.map(r => r.leafCount), borderColor: '#f57c00', backgroundColor: 'rgba(245, 124, 0, 0.1)', fill: true, tension: 0.2 }
         ]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: {
-          y: { beginAtZero: true }
-        }
-      }
+      options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
     });
   }
 
-  // XSS対策用エスケープ関数
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
